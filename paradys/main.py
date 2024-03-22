@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from scipy.stats import chi2
 import multiprocessing
+import os
 
 
 # Import functions from other modules within the package
@@ -140,11 +141,11 @@ def chi(edge, gene, patient, mutations, networks):
 
     return chi_val
 
-def create_statistics_p(p, d, scores, mutations, networks, patients, directed, tfs, edges_counts):
+def create_statistics_p(p, d, scores, mutations, networks, patients, 
+                        directed, tfs, edges_counts, output_dir):
     net = networks[networks['patient'] == p]
     data = []
     target_edges = set(net['edge'])  # Convert to set for faster lookups and avoid duplicates
-
 
     gene_sets_p = tfs[tfs['patients']==p]
     for mut in gene_sets_p['mutations']:
@@ -152,8 +153,12 @@ def create_statistics_p(p, d, scores, mutations, networks, patients, directed, t
         dysregulations_list = []
 
         # Collect target genes for each TF-gene pair in gene_sets_p
-        target_genes = net[net['tf'].isin(gene_sets_p[gene_sets_p['mutations'] == mut]['connected targets'])]['gene']
-
+        conn_targets_list = gene_sets_p[gene_sets_p['mutations'] == mut]['connected targets']
+        print("Conn_targets:", conn_targets_list)
+        mut_edges = net[net['gene'].isin(conn_targets_list)]
+        print("Mut edges:", mut_edges)
+        target_genes = mut_edges['gene']
+        
         # Calculate chi-squared and p-value for each TF-gene-edge combination
         for target in target_genes:
             edge = [gene_sets_p.loc[gene_sets_p['connected targets'] == target, 'mutations'].values[0], target]
@@ -216,12 +221,14 @@ def create_statistics_p(p, d, scores, mutations, networks, patients, directed, t
             top_scores = [pr[i] for i in np.argsort(pr)[:len(total_drivers)]]
             df = pd.DataFrame({'Gene': top_genes, 'Score': top_scores})
 
-            return data, df
-        else:
-            return data
+            # Save score files to output directory.
+            df.to_csv(output_dir+f'{p}_scores.csv', sep='\t')
+        
+        # Save per-patient driver-dysregulation file.
+        data.to_csv(output_dir+f'{p}_drivers.csv', sep='\t')
+    
     else:
         print('No driver genes found for patient ' + p)
-        return False
 
 
 
@@ -243,22 +250,25 @@ def set_up_networks(binarized_networks, patients_M):
     return edges_counts, patients
 
 def process_patients(patients : list, kappa : int, d : float, scores : bool, 
-                     mutations_path : str, networks_path : str, directed : bool):
+                     mutations_path : str, networks_path : str, directed : bool,
+                     output_dir : str):
+    # Check if output directory exists.
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+    
+    # Read input data.
     mutations= pd.read_csv(mutations_path,sep=',')
     networks= pd.read_csv(networks_path,sep=',')
+    
+    # Compute kappa neighborhood of putative drivers.
     tfs = get_relations(kappa, patients, mutations, networks)
     edges_counts = networks['edge'].value_counts().to_dict()
-    #pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())  # Use all available CPU cores
-    args_list = [(p, d, scores, mutations, networks, patients, directed, tfs, edges_counts) for p in patients]
-    print(len(args_list[0]))
-    create_statistics_p(patients[0], d, scores, mutations, networks, patients, directed, tfs, edges_counts)
-    quit()
-    results = pool.map(create_statistics_p, args_list)
+    
+    # Create argument list for concurrent task execution.
+    pool = multiprocessing.Pool(processes=multiprocessing.cpu_count()-1)
+    args_list = [(p, d, scores, mutations, networks, patients, directed, tfs, edges_counts, output_dir) for p in patients]
+
+    # Start parallel analysis.
+    pool.starmap(create_statistics_p, args_list)
     pool.close()
     pool.join()
-    final_result = pd.concat([result for result in results if isinstance(result, pd.DataFrame)], ignore_index=True)
-    print(final_result)
-    return final_result
-
-
-
