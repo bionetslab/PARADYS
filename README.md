@@ -1,4 +1,4 @@
-# Overview
+# PARADYS
 
 In this repository we present our tool PARADYS for **PA**tient-specific **RA**nking of genes driving **DYS**regulations in cancer. Below you can find information on installation, usage and exemplary calls.
 
