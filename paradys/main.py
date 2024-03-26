@@ -22,7 +22,11 @@ def dysregulation_condition(edge, patient_networks):
         True if edge is present in the patient's dysregulatory network, False otherwise
 
     '''
-    return edge in patient_networks['edge']
+    if edge[0] in patient_networks['tf']:
+        patient_networks = patient_networks[patient_networks['tf']==edge[0]]
+        return edge[1] in patient_networks['gene']
+    else:
+        return False
 
 def mutation_condition(gene, patient_mutations):
     '''
@@ -148,22 +152,29 @@ def create_statistics_p(p, d, scores, mutations, networks, patients,
     target_edges = set(net['edge'])  # Convert to set for faster lookups and avoid duplicates
 
     gene_sets_p = tfs[tfs['patients']==p]
+    
     for mut in gene_sets_p['mutations']:
         scores_list = []
         dysregulations_list = []
 
-        # Collect target genes for each TF-gene pair in gene_sets_p
-        conn_targets_list = gene_sets_p[gene_sets_p['mutations'] == mut]['connected targets']
-        print("Conn_targets:", conn_targets_list)
-        mut_edges = net[net['gene'].isin(conn_targets_list)]
-        print("Mut edges:", mut_edges)
-        target_genes = mut_edges['gene']
+        ## Collect target genes for each TF-gene pair.
         
-        # Calculate chi-squared and p-value for each TF-gene-edge combination
-        for target in target_genes:
-            edge = [gene_sets_p.loc[gene_sets_p['connected targets'] == target, 'mutations'].values[0], target]
+        # Extract precomputed mutated TFs in kappa neighbourhood of mutation mut.
+        conn_targets = gene_sets_p[gene_sets_p['mutations'] == mut]['connected targets']
+        conn_targets_list = conn_targets.iloc[0]
+        # Extract edges (rows in input data) that have TF contained in connected TFs list.
+        mut_edges = net[net['tf'].isin(conn_targets_list)]
+        
+        # Extract all edge pairs, i.e. tuple of mutated TF in kappa neighbourhood and target gene
+        # and compute chi-squared statistic and p-value.
+        for _,row in mut_edges.iterrows():
+            source = row['tf']
+            target = row['gene']
+            edge = [source, target]
             target_edges.add(target)
-            chi_g_e = chi(edge, target, p, mutations, networks)
+            
+            # Calcluate Chi-squared test statistic.
+            chi_g_e = chi(edge, mut, p, mutations, networks)
             if chi_g_e > 3.84:
                 p_value = chi2.sf(chi_g_e, 1)
                 scores_list.append(p_value)
