@@ -26,10 +26,10 @@ The input arguments are given by:
 * `NETWORK_FILE`: Path to the input dysregulation networks file.
 * `MUTATION_FILE`: Path to the input mutation matrix file.
 * `OUTPUT_DIR`: Path to output directory for storing results.
-* `KAPPA`: Value of parameter kappa (int). Sets size of considered shortest-path neighborhood for putative driver gene identification. 
-* `D`: Dumping factor for PageRank algorithm (optional, default is 0.85).
+* `KAPPA`: Value of parameter kappa (int). Sets size of considered shortest-path neighborhood for putative driver gene identification. Larger values correspond to potentially more detected drivers, but also increase runtime.
+* `D`: Dumping factor for PageRank algorithm (optional, default is 0.85). Only applies if `--scores` is set.
 * `--scores`: Set this flag if you want to compute impact scores for drivers. (optional, default is False)
-* `--directed`: Set this flag if your input dysregulation networks are directed. This will be accounted for in the ranking process. Is only used when `--scores` is also set (optional, default is False).
+* `--directed`: Set this flag if your input dysregulation networks are directed. This will be accounted for in the ranking process. Only applies if `--scores` is set. (optional, default is False).
 
 
 
