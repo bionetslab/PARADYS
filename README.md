@@ -40,13 +40,14 @@ We added two toy input data files under `example/networks_mini.csv` and `example
 python paradys.py --patients P2 P3 --networks examples/networks_mini.csv --mutations examples/mutations_mini.csv --outdir results/ --kappa 2
 ```
 
+For additionally computing per-patient driver impact scores you can simply run
+```
+python paradys.py --patients P2 P3 --networks examples/networks_mini.csv --mutations examples/mutations_mini.csv --outdir results/ --kappa 2 --scores
+```
 
 
 ## Output
 
-In the output directory, we create the file `drivers.csv` storing detected significant driver genes for each analyzed patient. The column `'patient'` stores the ID of the patient that possesses the signifcant driver gene in `'driver'`, in combination with the associated dysregulation edge in `'dysregulation'` and the respective p-value of the chi-squared test in the column `'pvalue'`.
+In the output directory, for each analyzed patient we create a file named `<PATIENT_ID>_drivers.csv` storing detected significant driver genes for each analyzed patient. In the column `'driver'` we store the detected significant driver gene, in combination with the associated dysregulation edge in the column `'dysregulation'` and the respective p-value of the chi-squared test in the column `'pvalue'`.
 
-If additionally the `--scores` flag was set, the calculated impact scores for each driver are stored in the file `scores.csv`. The column `'patient'` stores the respective patient ID, `'driver'` the considered driver gene, and `'score'` the computed personalized impact score.
-
-
-
+If additionally the `--scores` flag was set, we create a per-patient score file named `<PATIENT_ID>_scores.csv` storing drivers in the column `'driver'` and the corresponding computed impact score in `'score'`.
