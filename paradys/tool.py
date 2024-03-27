@@ -305,8 +305,71 @@ def compute_per_patient_drivers(mutation_patient_dict : dict, edge_patient_dict 
                     results['dysregulation'].append(edge)
                     results['pvalue'].append(pval)
     
-    return results            
-            
+    return results      
+
+def compute_driver_scores(driver_results : pd.DataFrame, d : float, directed : bool,
+                          edge_patient_dict : dict) -> dict:
+    """Compute personalized ranking of driver genes.
+
+    Args:
+        driver_results (pd.DataFrame): Personalized driver results (patient, driver, edge, pvalue).
+        d (float): Damping factor for PageRank.
+        directed (bool): Whether or not input networks are directed.
+        edge_patient_dict (dict): Keys are edges, values are sets of patients.
+
+    Returns:
+        dict: Keys are drivers, values are calculated impact scores.
+    """
+    drivers = set(driver_results['driver'])
+    edges = set(driver_results['dysregulation'])
+    # TODO: Make sure that this set actually contains tuples as edges (and not strings).
+    nodes = list(drivers.union(edges))
+    
+    # Init graph object.
+    graph = gt.Graph(directed=directed)
+    
+    # Add nodes to graph.
+    vertices = graph.add_vertex(len(nodes))
+    
+    # Add labels to nodes.
+    vertex_names = graph.new_vertex_property("string")
+    vertex_weights = graph.new_vertex_property("double")
+    edge_weights = graph.new_edge_property("double")
+    
+    # Set names and weights on vertices.
+    for v, name in zip(vertices, nodes):
+        vertex_names[v] = str(name)
+        # TODO: update vertex weight of edges accordingly.
+        vertex_weights[v] = len(edge_patient_dict[name])/len(driver_results) if name in edges else 0
+        
+    # Add edges between connected dysregulation edges with weight 1.
+    for source in edges:
+        for target in edges:
+            if source[0]==target[1]:
+                e = graph.add_edge(nodes.index(source), nodes.index(target))
+                edge_weights[e]=1
+    
+    # Add edges between genes and edges with weight -log(pval).
+    for driver in drivers:
+        # Extract corresponding dysregulation edges to driver.
+        driver_edges = driver_results[driver_results['driver']==driver]
+        for _, row in driver_edges.iterrows():
+            edge = row['dysregulation']
+            e = graph.add_edge(nodes.index(edge), nodes.index(driver))
+            edge_weights[e]=-np.log(row['pvalue'])
+    
+    # Apply PageRank algorithm using vertex and edge weights.
+    pagerank_prop = graph.new_vertex_property("float")
+    pagerank = gt.pagerank(graph, damping=d, pers=vertex_weights,
+                                      weight=edge_weights, prop=pagerank_prop)
+    pagerank_res = pagerank.get_array()
+    # TODO: check how to only extract driver's scores and not edges.
+    sorted_drivers = [vertex_names[i] for i in np.argsort(pagerank_res)]
+    sorted_scores = [pagerank_res[i] for i in np.argsort(pagerank_res)]
+    
+    out_dict = {'driver': sorted_drivers , 'score': sorted_scores}
+    return out_dict 
+
 
 def process_patients(patients : list, kappa : int, d : float, scores : bool, 
                      mutations_path : str, networks_path : str, directed : bool,
@@ -365,6 +428,14 @@ def process_patients(patients : list, kappa : int, d : float, scores : bool,
         driver_results['patient']=[pat]*(len(driver_results['driver']))
         driver_df = pd.DataFrame(driver_results)
         out_data_frame = pd.concat([out_data_frame, driver_df], ignore_index=True)
+        
+        # Check if personalized ranking of drivers is desired.
+        if scores:
+            driver_scores = compute_driver_scores(driver_df, d, directed, edge_patient_dict)
+            scores_df = pd.DataFrame(driver_scores)
+            # Save in personalized scores file.
+            scores_df.to_csv(output_dir+f'{pat}_scores.csv', sep='\t')
+            
     
     # Write output dataframe for all patients.
     out_data_frame.to_csv(output_dir+'drivers.csv', sep='\t', index=False)
