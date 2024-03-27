@@ -322,7 +322,6 @@ def compute_driver_scores(driver_results : pd.DataFrame, d : float, directed : b
     """
     drivers = set(driver_results['driver'])
     edges = set(driver_results['dysregulation'])
-    # TODO: Make sure that this set actually contains tuples as edges (and not strings).
     nodes = list(drivers.union(edges))
     
     # Init graph object.
@@ -337,10 +336,10 @@ def compute_driver_scores(driver_results : pd.DataFrame, d : float, directed : b
     edge_weights = graph.new_edge_property("double")
     
     # Set names and weights on vertices.
-    for v, name in zip(vertices, nodes):
-        vertex_names[v] = str(name)
+    for v, node in zip(vertices, nodes):
+        vertex_names[v] = str(node)
         # TODO: update vertex weight of edges accordingly.
-        vertex_weights[v] = len(edge_patient_dict[name])/len(driver_results) if name in edges else 0
+        vertex_weights[v] = len(edge_patient_dict[node])/len(driver_results) if node in edges else 0
         
     # Add edges between connected dysregulation edges with weight 1.
     for source in edges:
@@ -363,9 +362,9 @@ def compute_driver_scores(driver_results : pd.DataFrame, d : float, directed : b
     pagerank = gt.pagerank(graph, damping=d, pers=vertex_weights,
                                       weight=edge_weights, prop=pagerank_prop)
     pagerank_res = pagerank.get_array()
-    # TODO: check how to only extract driver's scores and not edges.
-    sorted_drivers = [vertex_names[i] for i in np.argsort(pagerank_res)]
-    sorted_scores = [pagerank_res[i] for i in np.argsort(pagerank_res)]
+    driver_names = {str(x) for x in drivers}
+    sorted_drivers = [vertex_names[i] for i in np.argsort(pagerank_res) if vertex_names[i] in driver_names]
+    sorted_scores = [pagerank_res[i] for i in np.argsort(pagerank_res) if vertex_names[i] in driver_names]
     
     out_dict = {'driver': sorted_drivers , 'score': sorted_scores}
     return out_dict 
@@ -413,7 +412,6 @@ def process_patients(patients : list, kappa : int, d : float, scores : bool,
     edge_patient_dict = compute_edge_patient_dict(networks)
     
     # Analyze each patient individually.
-    out_data_frame = pd.DataFrame(columns=['patient', 'driver', 'dysregulation', 'pvalue'])
     for pat in patients:
         # Build dysregulation network graph object.
         dys_graph, vertex_translator = build_dysregulation_graph(networks, pat)
@@ -425,18 +423,12 @@ def process_patients(patients : list, kappa : int, d : float, scores : bool,
         driver_results = compute_per_patient_drivers(mutation_patient_dict, edge_patient_dict, 
                                     dys_graph, putative_drivers, all_patients, vertex_translator)
         # Append drivers to final output dataframe.
-        driver_results['patient']=[pat]*(len(driver_results['driver']))
         driver_df = pd.DataFrame(driver_results)
-        out_data_frame = pd.concat([out_data_frame, driver_df], ignore_index=True)
+        driver_df.to_csv(output_dir+f'{pat}_drivers.csv', sep='\t', index=False)
         
         # Check if personalized ranking of drivers is desired.
         if scores:
             driver_scores = compute_driver_scores(driver_df, d, directed, edge_patient_dict)
             scores_df = pd.DataFrame(driver_scores)
             # Save in personalized scores file.
-            scores_df.to_csv(output_dir+f'{pat}_scores.csv', sep='\t')
-            
-    
-    # Write output dataframe for all patients.
-    out_data_frame.to_csv(output_dir+'drivers.csv', sep='\t', index=False)
-    
+            scores_df.to_csv(output_dir+f'{pat}_scores.csv', sep='\t', index=False)
