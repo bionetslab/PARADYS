@@ -339,7 +339,7 @@ def compute_driver_scores(driver_results : pd.DataFrame, d : float, directed : b
     for v, node in zip(vertices, nodes):
         vertex_names[v] = str(node)
         # TODO: update vertex weight of edges accordingly.
-        vertex_weights[v] = len(edge_patient_dict[node])/len(driver_results) if node in edges else 0
+        vertex_weights[v] = len(driver_results[driver_results['driver']==node])/len(driver_results)
         
     # Add edges between connected dysregulation edges with weight 1.
     for source in edges:
