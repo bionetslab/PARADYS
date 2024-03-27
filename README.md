@@ -6,12 +6,13 @@ In this repository we present our tool PARADYS for **PA**tient-specific **RA**nk
 
 ## Installation
 
-To use PARADYS you need to have Python installed on your system. Install the necessary conda environment as follows:
+To use PARADYS you need to have Python installed on your system. Install the necessary conda environment by running
 
 ```
 conda env create -f environment.yml
 ```
 
+and then activate the newly created environment.
 
 
 ## Usage
