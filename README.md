@@ -34,19 +34,19 @@ The input arguments are given by:
 
 ## Example Call
 
-Follow the download instructions in the directory `examples/` to download exemplary preprocessed input files. You can then apply PARADYS on this input by calling:
+We added two toy input data files under `example/networks_mini.csv` and `examples/mutations_mini.csv`. For analyzing patients `P2` and `P3` you can then run PARADYS on this input by calling:
 
 ```
-python paradys.py --patients TCGA-CH-5766 --networks examples/networks.csv --mutations examples/mutations.csv --outdir results/ --kappa 3 --d 0.85 
+python paradys.py --patients P2 P3 --networks examples/networks_mini.csv --mutations examples/mutations_mini.csv --outdir results/ --kappa 2
 ```
 
 
 
 ## Output
 
-In the output directory, we create a driver-dysregulation file for each input patient named `'<PATIENT_ID>_scores.csv'`. It consists of detected significant driver genes in the column `'driver'`, in combination with the associated dysregulation edge in `'dysregulation'` and the respective p-value of the chi-squared test in `'p-value'` .
+In the output directory, we create the file `drivers.csv` storing detected significant driver genes for each analyzed patient. The column `'patient'` stores the ID of the patient that possesses the signifcant driver gene in `'driver'`, in combination with the associated dysregulation edge in `'dysregulation'` and the respective p-value of the chi-squared test in the column `'pvalue'`.
 
-If additionally the `--scores` flag was set, the calculated impact scores for each driver are stored in the patient-specific file `<PATIENT_ID>_scores.csv`.
+If additionally the `--scores` flag was set, the calculated impact scores for each driver are stored in the file `scores.csv`. The column `'patient'` stores the respective patient ID, `'driver'` the considered driver gene, and `'score'` the computed personalized impact score.
 
 
 
