@@ -90,8 +90,7 @@ def mutations_to_dict(mutations_df : pd.DataFrame) -> dict:
     all_patients = set(mutations_df['patient'])
     mutations_dict = {pat : set() for pat in all_patients}
     
-    for _, row in mutations_df.iterrows():
-        mutations_dict[row['patient']].add(row['gene'])
+    [mutations_dict[row[0]].add(row[1]) for row in zip(mutations_df['patient'], mutations_df['gene'])]
     
     return mutations_dict
 
@@ -110,11 +109,11 @@ def networks_to_dict(networks_df : pd.DataFrame) -> tuple:
     networks_dict = {pat : set() for pat in all_patients}
     tf_dict = {pat : set() for pat in all_patients}
     
-    for _, row in networks_df.iterrows():
-        patient = row['patient']
+    for row in zip(networks_df['patient'], networks_df['tf'], networks_df['gene']):
+        patient = row[0]
         # Extract edge.
-        source = row['tf']
-        target = row['gene']
+        source = row[1]
+        target = row[2]
         networks_dict[patient].add((source, target))
         # Extract TF information.
         tf_dict[patient].add(source)
