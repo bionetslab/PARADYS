@@ -56,7 +56,7 @@ For additionally computing per-patient driver impact scores you can simply run
 python paradys.py --patients P2 P3 --networks examples/networks_mini.csv --mutations examples/mutations_mini.csv --outdir results/ --kappa 2 --scores
 ```
 
-
+If you want to use PARADYS on "real-life" input data, follow the download instructions in `preprocessing/README.md`. Be aware that this input cohort consists of ~470 patients and therefore takes significantly longer to compute. 
 
 ## Output
 
