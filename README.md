@@ -41,6 +41,8 @@ PARADYS expects two comma-separated `.csv` input files:
 1) The input `NETWORK_FILE` must contain the columns `'patient'`, `'tf'`, and `'gene'`. It has to contain all directed dysregulation edges `(a,b)` from your personalized input networks, with the source node `a` stored in column `'tf'` and target node `b` stored in `'gene'`. The column `'patient'` stores the ID of the patient that this edge belongs to. 
 2) The input `MUTATION_FILE` must contain the two columns `'patient'` and `'gene'`. It has to contain the sets of mutated genes for each patient, with the mutated gene in the column `'gene'` and the corresponding patient ID in the column `'patient'`.
 
+In the directory `preprocessing/` we present an exemplary script for generating such input data from TCGA mutation data and SSN networks.
+
 
 
 ## Example Call
@@ -57,6 +59,8 @@ python paradys.py --patients P2 P3 --networks examples/networks_mini.csv --mutat
 ```
 
 If you want to use PARADYS on "real-life" input data, follow the download instructions in `preprocessing/README.md`. Be aware that this input cohort consists of ~470 patients and therefore takes significantly longer to compute. 
+
+
 
 ## Output
 
