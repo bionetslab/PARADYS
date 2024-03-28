@@ -12,35 +12,25 @@ def build_dysregulation_graph(networks : dict, patient : str) -> tuple:
         patient (str): Patient ID to analyze.
 
     Returns:
-        tuple: First entry is graph tools object, second entry is VertexPropertyMap containing
-        vertex names to vertex ID translation.
+        tuple: First entry is graph tools object, second entry is dict containing
+        vertex i's label at index i, third entry is dictionary with keys as vertex labels and
+        values as corresponding vertex ID.
     """
     g = gt.Graph(directed=True)
     patient_edges = networks[patient]
-    vertex_names = g.add_edge_list(patient_edges, hashed=True)
-    return g, vertex_names
-    
-def get_vertex_id(driver : str, vertex_labels : gt.VertexPropertyMap, max_id : int) -> int:
-    """Finds corresponding ID of string vertex label in graph.
+    vertex_prop = g.add_edge_list(patient_edges, hashed=True)
+    # Turn vertex property into dict.
+    vertex_to_label = {ind : vertex_prop[ind] for ind in range(g.num_vertices())}
+    # Precompute and return inverse of vertex_to_label to save computation time later.
+    label_to_vertex = {vertex_prop[ind] : ind for ind in range(g.num_vertices())}
+        
+    return g, vertex_to_label, label_to_vertex
 
-    Args:
-        driver (str): String label of driver vertex.
-        vertex_labels (gt.VertexPropertyMap): Array with vertex i's node label at index i.
-        max_id (int): Length of vertex_labels, i.e. number of vertices.
-
-    Returns:
-        int: Vertex ID in graph object.
-    """
-    for vert in range(max_id):
-        if vertex_labels[vert]==driver:
-            return vert
-    
-    print("Warning: Index of given vertex name could not be found.")
-    return -1
 
 def compute_neighbourhood(kappa : int, patient: str, mutations : dict, 
                           tfs : dict, dys_graph : gt.Graph, 
-                          vertex_translator : gt.VertexPropertyMap) -> dict:
+                          vertex_to_label : dict,
+                          label_to_vertex : dict) -> dict:
     """Computes shortest-path neighborhood for all mutated TFs.
 
     Args:
@@ -49,7 +39,8 @@ def compute_neighbourhood(kappa : int, patient: str, mutations : dict,
         mutations (dict): Dict storing per-patient mutations.
         tfs (dict): Dict storing per-patient existing transcription factors.
         dys_graph (gt.Graph): Graph tool graph representing patient's dysregulation network.
-        vertex_translator (gt.VertexPropertyMap): At index i, it stores vertex's i label.
+        vertex_to_label (gt.VertexPropertyMap): At index i, it stores vertex's i label.
+        label_to_vertex (dict): Keys are vertex labels, index is vertex ID.
         
     Returns:
         dict: Keys are tuples of mutated TFs and its corresponding ID in the network graph and values 
@@ -68,7 +59,7 @@ def compute_neighbourhood(kappa : int, patient: str, mutations : dict,
     if len(putative_drivers) > 0:
         # Compute all putative driver neighborhoods.
         for driver in putative_drivers:
-            driver_id = get_vertex_id(driver, vertex_translator, dys_graph.num_vertices())
+            driver_id = label_to_vertex[driver]
             
             # Compute shortest-path distances with maximal value of kappa.
             dist = gt.shortest_distance(dys_graph, source=dys_graph.vertex(driver_id), max_dist=kappa)
@@ -78,7 +69,7 @@ def compute_neighbourhood(kappa : int, patient: str, mutations : dict,
             nbor_ids = np.where(np_dist <= kappa)[0]
             
             # Turn IDs into vertex string names (store both).
-            nbors_set = [(vertex_translator[x], x) for x in nbor_ids]
+            nbors_set = [(vertex_to_label[x], x) for x in nbor_ids]
             nbors_set = set(nbors_set)
             
             # Append to per-patient dictionary.
@@ -96,59 +87,39 @@ def mutations_to_dict(mutations_df : pd.DataFrame) -> dict:
     Returns:
         dict: Keys are patient IDs and values are sets of corresponding mutated genes.
     """
-    mutations_dict = dict()
     all_patients = set(mutations_df['patient'])
+    mutations_dict = {pat : set() for pat in all_patients}
     
-    for patient in all_patients:
-        mutations_patient = mutations_df[mutations_df['patient']==patient]
-        genes = set(mutations_patient['gene'])
-        mutations_dict[patient]=genes
+    for _, row in mutations_df.iterrows():
+        mutations_dict[row['patient']].add(row['gene'])
     
     return mutations_dict
 
-def networks_to_dict(networks_df : pd.DataFrame) -> dict:
-    """Transform networks DataFrame into dictionary for faster lookup.
+def networks_to_dict(networks_df : pd.DataFrame) -> tuple:
+    """Transform networks DataFrame edges and tfs into dictionaries for faster lookup.
 
     Args:
         networks_df (pd.DataFrame): Input dysregulation edge data (columns are 'patient', 'tf', 'gene').
 
     Returns:
-        dict: Keys are patient IDs and values are sets of edges tuples (in the format (TF, gene)).
+        tuple: First entry is dict with keys as patient IDs and values are sets of edges tuples
+        (in the format (TF, gene)); second entry is dict with keys as patients and values are
+        sets of TFs.
     """  
-    networks_dict = dict()
     all_patients = set(networks_df['patient'])
+    networks_dict = {pat : set() for pat in all_patients}
+    tf_dict = {pat : set() for pat in all_patients}
     
-    for patient in all_patients:
-        networks_patients = networks_df[networks_df['patient']==patient]
-        edges = set()
+    for _, row in networks_df.iterrows():
+        patient = row['patient']
+        # Extract edge.
+        source = row['tf']
+        target = row['gene']
+        networks_dict[patient].add((source, target))
+        # Extract TF information.
+        tf_dict[patient].add(source)
         
-        for _, row in networks_patients.iterrows():
-            source = row['tf']
-            target = row['gene']
-            edges.add((source, target))
-        
-        networks_dict[patient] = edges
-        
-    return networks_dict
-
-def extract_tfs(networks_df : pd.DataFrame) -> dict:
-    """Extract set of transcription factors existing in per-patient network.
-
-    Args:
-        networks_df (pd.DataFrame):Input dysregulation edge data (columns are 'patient', 'tf', 'gene').
-
-    Returns:
-        dict: Keys are patients, values are sets of transcription factors.
-    """
-    all_patients = set(networks_df['patient'])
-    tf_dict = dict()
-    
-    for patient in all_patients:
-        networks_patient = networks_df[networks_df['patient']==patient]
-        tfs = set(networks_patient['tf'])
-        tf_dict[patient]=tfs
-    
-    return tf_dict   
+    return networks_dict, tf_dict
 
 
 def compute_mutation_patient_dict(mutations : dict) -> dict:
@@ -267,7 +238,7 @@ def chi_squared_test(edge : tuple, driver : str, mutation_patient_dict : dict,
 
 def compute_per_patient_drivers(mutation_patient_dict : dict, edge_patient_dict : dict,
                                 dys_graph : gt.Graph, putative_drivers : dict,
-                                all_patients : set, vertex_translator : gt.VertexPropertyMap) -> dict:
+                                all_patients : set, vertex_to_label : dict) -> dict:
     """Compute per-patient drivers and dysregulations.
 
     Args:
@@ -276,7 +247,7 @@ def compute_per_patient_drivers(mutation_patient_dict : dict, edge_patient_dict 
         dys_graph (gt.Graph): Graph tool graph representing patients dysregulation network.
         putative_drivers (dict): Keys are mutated TFs, values are genes in kappa neighborhood.
         all_patients (set): Set of all patient IDs in cohort.
-        vertex_translator (gt.VertexPropertyMap): Array with vertex i's label at index i.
+        vertex_to_label (dict): Dict with vertex i's label at position i.
 
     Returns:
         dict: Dict of drivers with keys 'driver', 'edge', 'pvalue'.
@@ -294,7 +265,7 @@ def compute_per_patient_drivers(mutation_patient_dict : dict, edge_patient_dict 
             for vertex_nbor in vertex_nbors:
                 # First entry of tuple stores vertex name.
                 source_node = vertex[0]
-                target_node = vertex_translator[vertex_nbor]
+                target_node = vertex_to_label[vertex_nbor]
                 edge = (source_node, target_node)
                 # Test association between driver and dysregulation edge.
                 pval = chi_squared_test(edge, driver[0], mutation_patient_dict, 
@@ -307,15 +278,13 @@ def compute_per_patient_drivers(mutation_patient_dict : dict, edge_patient_dict 
     
     return results      
 
-def compute_driver_scores(driver_results : pd.DataFrame, d : float, directed : bool,
-                          edge_patient_dict : dict) -> dict:
+def compute_driver_scores(driver_results : pd.DataFrame, d : float, directed : bool) -> dict:
     """Compute personalized ranking of driver genes.
 
     Args:
         driver_results (pd.DataFrame): Personalized driver results (patient, driver, edge, pvalue).
         d (float): Damping factor for PageRank.
         directed (bool): Whether or not input networks are directed.
-        edge_patient_dict (dict): Keys are edges, values are sets of patients.
 
     Returns:
         dict: Keys are drivers, values are calculated impact scores.
@@ -396,8 +365,7 @@ def process_patients(patients : list, kappa : int, d : float, scores : bool,
     
     # Transform mutation and network data into dictionaries for faster lookup.
     mutations = mutations_to_dict(mutations_df)
-    networks = networks_to_dict(networks_df)
-    tfs = extract_tfs(networks_df)
+    networks, tfs = networks_to_dict(networks_df)
     
     del mutations_df
     del networks_df
@@ -414,21 +382,21 @@ def process_patients(patients : list, kappa : int, d : float, scores : bool,
     # Analyze each patient individually.
     for pat in patients:
         # Build dysregulation network graph object.
-        dys_graph, vertex_translator = build_dysregulation_graph(networks, pat)
+        dys_graph, vertex_to_label, label_to_vertex = build_dysregulation_graph(networks, pat)
         
         # Compute kappa neighborhood of putative drivers.
         putative_drivers = compute_neighbourhood(kappa, pat, mutations, tfs, 
-                                                 dys_graph, vertex_translator)
+                                                 dys_graph, vertex_to_label, label_to_vertex)
         # Compute significant driver-dysregulation pairs.
         driver_results = compute_per_patient_drivers(mutation_patient_dict, edge_patient_dict, 
-                                    dys_graph, putative_drivers, all_patients, vertex_translator)
+                                    dys_graph, putative_drivers, all_patients, vertex_to_label)
         # Append drivers to final output dataframe.
         driver_df = pd.DataFrame(driver_results)
         driver_df.to_csv(output_dir+f'{pat}_drivers.csv', sep='\t', index=False)
         
         # Check if personalized ranking of drivers is desired.
         if scores:
-            driver_scores = compute_driver_scores(driver_df, d, directed, edge_patient_dict)
+            driver_scores = compute_driver_scores(driver_df, d, directed)
             scores_df = pd.DataFrame(driver_scores)
             # Save in personalized scores file.
             scores_df.to_csv(output_dir+f'{pat}_scores.csv', sep='\t', index=False)
