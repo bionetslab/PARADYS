@@ -15,6 +15,7 @@ conda env create -f environment.yml
 and then activate the newly created environment.
 
 
+
 ## Usage
 
 You can use PARADYS from the command line with the following arguments:
@@ -33,6 +34,15 @@ The input arguments are given by:
 
 
 
+## Input
+
+PARADYS expects two comma-separated `.csv` input files: 
+
+1) The input `NETWORK_FILE` must contain the columns `'patient'`, `'tf'`, and `'gene'`. It has to contain all directed dysregulation edges `(a,b)` from your personalized input networks, with the source node `a` stored in column `'tf'` and target node `b` stored in `'gene'`. The column `'patient'` stores the ID of the patient that this edge belongs to. 
+2) The input `MUTATION_FILE` must contain the two columns `'patient'` and `'gene'`. It has to contain the sets of mutated genes for each patient, with the mutated gene in the column `'gene'` and the corresponding patient ID in the column `'patient'`.
+
+
+
 ## Example Call
 
 We added two toy input data files under `example/networks_mini.csv` and `examples/mutations_mini.csv`. For analyzing patients `P2` and `P3` you can then run PARADYS on this input by calling:
@@ -45,6 +55,7 @@ For additionally computing per-patient driver impact scores you can simply run
 ```
 python paradys.py --patients P2 P3 --networks examples/networks_mini.csv --mutations examples/mutations_mini.csv --outdir results/ --kappa 2 --scores
 ```
+
 
 
 ## Output
