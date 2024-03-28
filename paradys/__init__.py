@@ -1,2 +1,1 @@
-#from .main import process_patients
-from .tool import process_patients
+from .main import process_patients
