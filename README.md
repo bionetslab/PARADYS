@@ -23,7 +23,7 @@ You can use PARADYS from the command line with the following arguments:
 python paradys.py --patients <PATIENT_IDS> --networks <NETWORK_FILE> --mutations <MUTATION_FILE> --outdir <OUTPUT_DIR> --kappa <KAPPA> --d <D> [--scores] [--directed]
 ```
 The input arguments are given by:
-* `PATIENT_IDS`: List of space-separated patient IDs of patients that are supposed to be analyzed. The patients IDs must match with those used in your input files.
+* `PATIENT_IDS`: List of space-separated patient IDs of patients that are supposed to be analyzed. The patients IDs must match with those used in your input files. If no input patient is given, i.e. only the empty string `""`, all patients in the input cohort will be analyzed.
 * `NETWORK_FILE`: Path to the input dysregulation networks file.
 * `MUTATION_FILE`: Path to the input mutation matrix file.
 * `OUTPUT_DIR`: Path to output directory for storing results.

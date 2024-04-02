@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from scipy.stats import chisquare, chi2
 import os
+import sys
 
 def build_dysregulation_graph(networks : dict, patient : str) -> tuple:
     """Build dysregulation network graph object from directed edge list.
@@ -249,7 +250,7 @@ def compute_per_patient_drivers(mutation_patient_dict : dict, edge_patient_dict 
         vertex_to_label (dict): Dict with vertex i's label at position i.
 
     Returns:
-        dict: Dict of drivers with keys 'driver', 'edge', 'pvalue'.
+        dict: Dict of drivers with keys 'driver', 'dysregulation', 'pvalue'.
     """
     results = {key : [] for key in ['driver', 'dysregulation', 'pvalue']}
     
@@ -277,19 +278,25 @@ def compute_per_patient_drivers(mutation_patient_dict : dict, edge_patient_dict 
     
     return results      
 
-def compute_driver_scores(driver_results : pd.DataFrame, d : float, directed : bool) -> dict:
+def compute_driver_scores(driver_results : pd.DataFrame, edge_patient_dict : dict, 
+                          d : float, directed : bool, num_patients : int) -> dict:
     """Compute personalized ranking of driver genes.
 
     Args:
-        driver_results (pd.DataFrame): Personalized driver results (patient, driver, edge, pvalue).
+        driver_results (dict): Dict of detected drivers with keys 'driver', 'dysregulation', 'pvalue'.
+        edge_patient_dict (dict): Keys are edges, values are sets of patients.
         d (float): Damping factor for PageRank.
-        directed (bool): Whether or not input networks are directed.
+        directed (bool): Whether or not to use directed line graph.
+        num_patients (int): Number of patients in the input cohort.
 
     Returns:
         dict: Keys are drivers, values are calculated impact scores.
     """
     drivers = set(driver_results['driver'])
+    drivers_array = np.array(driver_results['driver'])
     edges = set(driver_results['dysregulation'])
+    edges_array = np.array(driver_results['dysregulation'])
+    pvalue_array = np.array(driver_results['pvalue'])
     nodes = list(drivers.union(edges))
     
     # Init graph object.
@@ -306,8 +313,10 @@ def compute_driver_scores(driver_results : pd.DataFrame, d : float, directed : b
     # Set names and weights on vertices.
     for v, node in zip(vertices, nodes):
         vertex_names[v] = str(node)
-        # TODO: update vertex weight of edges accordingly.
-        vertex_weights[v] = len(driver_results[driver_results['driver']==node])/len(driver_results)
+        if node in drivers:
+            vertex_weights[v]=0
+        else:
+            vertex_weights[v] = len(edge_patient_dict[node])/num_patients
         
     # Add edges between connected dysregulation edges with weight 1.
     for source in edges:
@@ -319,11 +328,13 @@ def compute_driver_scores(driver_results : pd.DataFrame, d : float, directed : b
     # Add edges between genes and edges with weight -log(pval).
     for driver in drivers:
         # Extract corresponding dysregulation edges to driver.
-        driver_edges = driver_results[driver_results['driver']==driver]
-        for _, row in driver_edges.iterrows():
-            edge = row['dysregulation']
-            e = graph.add_edge(nodes.index(edge), nodes.index(driver))
-            edge_weights[e]=-np.log(row['pvalue'])
+        driver_indices = np.where(drivers_array == driver)[0]
+        driver_edges = edges_array[driver_indices]
+        driver_pvalues = pvalue_array[driver_indices]
+        for (edge, pvalue) in zip(driver_edges.tolist(), driver_pvalues.tolist()):
+            edge_tuple = (edge[0], edge[1])
+            e = graph.add_edge(nodes.index(edge_tuple), nodes.index(driver))
+            edge_weights[e]=-np.log(pvalue)
     
     # Apply PageRank algorithm using vertex and edge weights.
     pagerank_prop = graph.new_vertex_property("float")
@@ -373,6 +384,10 @@ def process_patients(patients : list, kappa : int, d : float, scores : bool,
     all_patients = set(mutations.keys())
     assert all_patients==set(networks.keys()), "Mutation and network patient lists are not equal."
     
+    # Check if user wants to analyze whole cohort.
+    if len(patients)==1 and patients[0]=="":
+        patients = all_patients
+    
     # Precompute sets of patients that contain given mutation or dysregulation edge.
     # Saves computation time in later per-patient chi squared tests.
     mutation_patient_dict = compute_mutation_patient_dict(mutations)
@@ -380,6 +395,10 @@ def process_patients(patients : list, kappa : int, d : float, scores : bool,
     
     # Analyze each patient individually.
     for pat in patients:
+        
+        if not pat in all_patients:
+            sys.exit(f"Patient {pat} is not contained in input cohort. Aborting...")
+        
         # Build dysregulation network graph object.
         dys_graph, vertex_to_label, label_to_vertex = build_dysregulation_graph(networks, pat)
         
@@ -395,7 +414,9 @@ def process_patients(patients : list, kappa : int, d : float, scores : bool,
         
         # Check if personalized ranking of drivers is desired.
         if scores:
-            driver_scores = compute_driver_scores(driver_df, d, directed)
+            num_patients = len(all_patients)
+            driver_scores = compute_driver_scores(driver_results, edge_patient_dict, d, directed, 
+                                                  num_patients)
             scores_df = pd.DataFrame(driver_scores)
             # Save in personalized scores file.
             scores_df.to_csv(output_dir+f'{pat}_scores.csv', sep='\t', index=False)

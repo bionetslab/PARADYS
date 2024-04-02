@@ -3,15 +3,15 @@ import argparse
 
 
 def _get_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--patients', nargs='+', default=[], help='Specify list of patient IDs separated by space')
+    parser = argparse.ArgumentParser(description="PARADYS tool for predicting genes driving dysregulation in cancer.")
+    parser.add_argument('--patients', nargs='+', default=[], help='Specify list of patient IDs separated by space. By entering "" as input, PARADYS analyzes the whole input cohort.')
     parser.add_argument('--networks', type=str, help='Specify path to dysregulation networks file')
     parser.add_argument('--mutations', type=str, help='Specify path to mutation matrix file')
     parser.add_argument('--outdir', type=str, help='Specify path for output directory')
     parser.add_argument('--kappa', type=int, help='Specify parameter kappa')
     parser.add_argument('--d', type=float, help='Specify dumping factor for PageRank',default=0.85)
-    parser.add_argument('--scores', action='store_true', help='Specify whether to return scores')
-    parser.add_argument('--directed', action='store_true', help='Specify if networks are directed')
+    parser.add_argument('--scores', action='store_true', help='Specify whether to compute and return impact scores')
+    parser.add_argument('--directed', action='store_true', help='Specify if line graph for impact scores calculationg should be directed')
     return parser
 
 
