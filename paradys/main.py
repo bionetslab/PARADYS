@@ -317,7 +317,11 @@ def compute_driver_scores(driver_results : pd.DataFrame, edge_patient_dict : dic
             vertex_weights[v]=0
         else:
             vertex_weights[v] = len(edge_patient_dict[node])/num_patients
-        
+    
+    # Normalize vertex weights to unit-sum (otherwise centrality values diverge here).
+    vertex_weights_scaled = vertex_weights.get_array()/np.sum(vertex_weights.get_array())
+    vertex_weights.a = vertex_weights_scaled
+    
     # Add edges between connected dysregulation edges with weight 1.
     for source in edges:
         for target in edges:
@@ -334,7 +338,7 @@ def compute_driver_scores(driver_results : pd.DataFrame, edge_patient_dict : dic
         for (edge, pvalue) in zip(driver_edges.tolist(), driver_pvalues.tolist()):
             edge_tuple = (edge[0], edge[1])
             e = graph.add_edge(nodes.index(edge_tuple), nodes.index(driver))
-            edge_weights[e]=-np.log(pvalue)
+            edge_weights[e]=-np.log10(pvalue)
     
     # Apply PageRank algorithm using vertex and edge weights.
     pagerank_prop = graph.new_vertex_property("float")
@@ -343,7 +347,9 @@ def compute_driver_scores(driver_results : pd.DataFrame, edge_patient_dict : dic
     pagerank_res = pagerank.get_array()
     driver_names = {str(x) for x in drivers}
     sorted_drivers = [vertex_names[i] for i in np.argsort(pagerank_res) if vertex_names[i] in driver_names]
+    sorted_drivers.reverse()
     sorted_scores = [pagerank_res[i] for i in np.argsort(pagerank_res) if vertex_names[i] in driver_names]
+    sorted_scores.reverse()
     
     out_dict = {'driver': sorted_drivers , 'score': sorted_scores}
     return out_dict 
