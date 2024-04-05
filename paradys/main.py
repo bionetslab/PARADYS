@@ -279,14 +279,14 @@ def compute_per_patient_drivers(mutation_patient_dict : dict, edge_patient_dict 
     return results      
 
 def compute_driver_scores(driver_results : pd.DataFrame, edge_patient_dict : dict, 
-                          d : float, directed : bool, num_patients : int) -> dict:
+                          d : float, undirected : bool, num_patients : int) -> dict:
     """Compute personalized ranking of driver genes.
 
     Args:
         driver_results (dict): Dict of detected drivers with keys 'driver', 'dysregulation', 'pvalue'.
         edge_patient_dict (dict): Keys are edges, values are sets of patients.
         d (float): Damping factor for PageRank.
-        directed (bool): Whether or not to use directed line graph.
+        undirected (bool): Whether or not to use undirected line graph.
         num_patients (int): Number of patients in the input cohort.
 
     Returns:
@@ -300,7 +300,7 @@ def compute_driver_scores(driver_results : pd.DataFrame, edge_patient_dict : dic
     nodes = list(drivers.union(edges))
     
     # Init graph object.
-    graph = gt.Graph(directed=directed)
+    graph = gt.Graph(directed=not undirected)
     
     # Add nodes to graph.
     vertices = graph.add_vertex(len(nodes))
@@ -356,8 +356,8 @@ def compute_driver_scores(driver_results : pd.DataFrame, edge_patient_dict : dic
 
 
 def process_patients(patients : list, kappa : int, d : float, scores : bool, 
-                     mutations_path : str, networks_path : str, directed : bool,
-                     output_dir : str):
+                     mutations_path : str, networks_path : str, undirected : bool,
+                     output_dir : str, all : bool):
     """Main function for starting PARADYS analysis.
 
     Args:
@@ -367,8 +367,9 @@ def process_patients(patients : list, kappa : int, d : float, scores : bool,
         scores (bool): Whether to compute personalized driver impact scores.
         mutations_path (str): Path to input mutations file.
         networks_path (str): Path to input networks file.
-        directed (bool): Whether dysregulation networks are directed.
+        undirected (bool): Whether line graph in PageRank ranking is undirected.
         output_dir (str): Path to output directory for storing results.
+        all (bool): Whether or not to analyze all patients in the given cohort.
     """
     
     # Check if output directory exists.
@@ -391,7 +392,7 @@ def process_patients(patients : list, kappa : int, d : float, scores : bool,
     assert all_patients==set(networks.keys()), "Mutation and network patient lists are not equal."
     
     # Check if user wants to analyze whole cohort.
-    if len(patients)==1 and patients[0]=="":
+    if all:
         patients = all_patients
     
     # Precompute sets of patients that contain given mutation or dysregulation edge.
@@ -421,7 +422,7 @@ def process_patients(patients : list, kappa : int, d : float, scores : bool,
         # Check if personalized ranking of drivers is desired.
         if scores:
             num_patients = len(all_patients)
-            driver_scores = compute_driver_scores(driver_results, edge_patient_dict, d, directed, 
+            driver_scores = compute_driver_scores(driver_results, edge_patient_dict, d, undirected, 
                                                   num_patients)
             scores_df = pd.DataFrame(driver_scores)
             # Save in personalized scores file.
