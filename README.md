@@ -20,17 +20,18 @@ and then activate the newly created environment.
 
 You can use PARADYS from the command line with the following arguments:
 ```
-python paradys.py --patients <PATIENT_IDS> --networks <NETWORK_FILE> --mutations <MUTATION_FILE> --outdir <OUTPUT_DIR> --kappa <KAPPA> --d <D> [--scores] [--directed]
+python paradys.py --patients <PATIENT_IDS> --networks <NETWORK_FILE> --mutations <MUTATION_FILE> --outdir <OUTPUT_DIR> --kappa <KAPPA> --d <D> [--scores] [--undirected] [--all]
 ```
 The input arguments are given by:
-* `PATIENT_IDS`: List of space-separated patient IDs of patients that are supposed to be analyzed. The patients IDs must match with those used in your input files. If no input patient is given, i.e. only the empty string `""`, all patients in the input cohort will be analyzed.
+* `PATIENT_IDS`: List of space-separated patient IDs of patients that are supposed to be analyzed. The patients IDs must match with those used in your input files.
 * `NETWORK_FILE`: Path to the input dysregulation networks file.
 * `MUTATION_FILE`: Path to the input mutation matrix file.
 * `OUTPUT_DIR`: Path to output directory for storing results.
 * `KAPPA`: Value of parameter kappa (int). Sets size of considered shortest-path neighborhood for putative driver gene identification. Larger values correspond to potentially more detected drivers, but also increase runtime.
 * `D`: Dumping factor for PageRank algorithm (optional, default is 0.85). Only applies if `--scores` is set.
 * `--scores`: Set this flag if you want to compute impact scores for drivers. (optional, default is False)
-* `--directed`: Set this flag if your input dysregulation networks are directed. This will be accounted for in the ranking process. Only applies if `--scores` is set. (optional, default is False).
+* `--undirected`: Set this flag if the linegraph used for PageRank centrality computation based on detected drivers and dysregulation edges is supposed to be undirected. Only applies if `--scores` is set. (optional, default is False).
+* `--all`: Set this flag if you wish to analyze every patient in the given cohort (optional, default is False). If set, `--patients` can be omitted.
 
 
 
