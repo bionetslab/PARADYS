@@ -229,7 +229,10 @@ def chi_squared_test(edge : tuple, driver : str, mutation_patient_dict : dict,
     # Build expectancy matrix from row and column sums.
     exp_matrix = np.dot(row_sums.T, col_sums) / mat_sum
     
-    # Run chi-squared test.
+    # Run chi-squared test if expectance matrix has only non-zeroes.
+    if not np.all(exp_matrix):
+        return np.nan
+    
     chisq, _ = chisquare(obs_divided, exp_matrix)
     chisq = np.sum(chisq)
     pval = 1 - chi2.cdf(chisq, 1)
