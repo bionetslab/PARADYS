@@ -282,14 +282,12 @@ def compute_per_patient_drivers(mutation_patient_dict : dict, edge_patient_dict 
     return results      
 
 def compute_driver_scores(driver_results : pd.DataFrame, edge_patient_dict : dict, 
-                          d : float, undirected : bool, num_patients : int) -> dict:
+                          num_patients : int) -> dict:
     """Compute personalized ranking of driver genes.
 
     Args:
         driver_results (dict): Dict of detected drivers with keys 'driver', 'dysregulation', 'pvalue'.
         edge_patient_dict (dict): Keys are edges, values are sets of patients.
-        d (float): Damping factor for PageRank.
-        undirected (bool): Whether or not to use undirected line graph.
         num_patients (int): Number of patients in the input cohort.
 
     Returns:
@@ -303,7 +301,7 @@ def compute_driver_scores(driver_results : pd.DataFrame, edge_patient_dict : dic
     nodes = list(drivers.union(edges))
     
     # Init graph object.
-    graph = gt.Graph(directed=not undirected)
+    graph = gt.Graph(directed=True)
     
     # Add nodes to graph.
     vertices = graph.add_vertex(len(nodes))
@@ -345,8 +343,8 @@ def compute_driver_scores(driver_results : pd.DataFrame, edge_patient_dict : dic
     
     # Apply PageRank algorithm using vertex and edge weights.
     pagerank_prop = graph.new_vertex_property("float")
-    pagerank = gt.pagerank(graph, damping=d, pers=vertex_weights,
-                                      weight=edge_weights, prop=pagerank_prop)
+    pagerank = gt.pagerank(graph, pers=vertex_weights,
+                                  weight=edge_weights, prop=pagerank_prop)
     pagerank_res = pagerank.get_array()
     driver_names = {str(x) for x in drivers}
     sorted_drivers = [vertex_names[i] for i in np.argsort(pagerank_res) if vertex_names[i] in driver_names]
@@ -358,19 +356,17 @@ def compute_driver_scores(driver_results : pd.DataFrame, edge_patient_dict : dic
     return out_dict 
 
 
-def process_patients(patients : list, kappa : int, d : float, scores : bool, 
-                     mutations_path : str, networks_path : str, undirected : bool,
+def process_patients(patients : list, kappa : int, scores : bool, 
+                     mutations_path : str, networks_path : str,
                      output_dir : str, all : bool):
     """Main function for starting PARADYS analysis.
 
     Args:
         patients (list): List of patient ID to be analyzed.
         kappa (int): Size of shortest-path neighborhood for putative driver identification.
-        d (float): Damping factor for PageRank algorithm.
         scores (bool): Whether to compute personalized driver impact scores.
         mutations_path (str): Path to input mutations file.
         networks_path (str): Path to input networks file.
-        undirected (bool): Whether line graph in PageRank ranking is undirected.
         output_dir (str): Path to output directory for storing results.
         all (bool): Whether or not to analyze all patients in the given cohort.
     """
@@ -425,8 +421,7 @@ def process_patients(patients : list, kappa : int, d : float, scores : bool,
         # Check if personalized ranking of drivers is desired.
         if scores:
             num_patients = len(all_patients)
-            driver_scores = compute_driver_scores(driver_results, edge_patient_dict, d, undirected, 
-                                                  num_patients)
+            driver_scores = compute_driver_scores(driver_results, edge_patient_dict, num_patients)
             scores_df = pd.DataFrame(driver_scores)
             # Save in personalized scores file.
             scores_df.to_csv(output_dir+f'{pat}_scores.csv', sep='\t', index=False)
