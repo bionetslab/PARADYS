@@ -341,7 +341,7 @@ def compute_driver_scores(driver_results : pd.DataFrame, edge_patient_dict : dic
         for (edge, pvalue) in zip(driver_edges.tolist(), driver_pvalues.tolist()):
             edge_tuple = (edge[0], edge[1])
             e = graph.add_edge(nodes.index(edge_tuple), nodes.index(driver))
-            edge_weights[e]=-np.log10(pvalue)
+            edge_weights[e]=1-np.log10(pvalue+1)
     
     # Apply PageRank algorithm using vertex and edge weights.
     pagerank_prop = graph.new_vertex_property("float")
