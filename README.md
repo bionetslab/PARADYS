@@ -12,7 +12,7 @@ To use PARADYS you need to have Python installed on your system. Install the nec
 conda env create -f environment.yml
 ```
 
-and then activate the newly created environment.
+and then activate the newly created environment `paradys_tool`.
 
 
 
