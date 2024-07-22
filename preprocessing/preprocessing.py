@@ -42,7 +42,7 @@ def process_networks(df, output_path):
             gene1, gene2 = eval(col_name)  # Convert the column name string to a tuple
             
             # If the edge is present (value is 1), add it to the transformed_data
-            if edge == 1:
+            if edge > 0:
                 transformed_data.append({
                     "patient": patient,
                     "edge": col_name,
