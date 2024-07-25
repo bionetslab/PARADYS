@@ -4,6 +4,7 @@ import numpy as np
 from scipy.stats import chisquare, chi2
 import os
 import sys
+from typing import Union
 
 def build_dysregulation_graph(networks : dict, patient : str, is_undirected : bool) -> tuple:
     """Build dysregulation network graph object from directed edge list.
@@ -96,11 +97,12 @@ def mutations_to_dict(mutations_df : pd.DataFrame) -> dict:
     
     return mutations_dict
 
-def networks_to_dict(networks_df : pd.DataFrame) -> tuple:
+def networks_to_dict(networks_df : pd.DataFrame, is_undirected : bool) -> tuple:
     """Transform networks DataFrame edges and tfs into dictionaries for faster lookup.
 
     Args:
         networks_df (pd.DataFrame): Input dysregulation edge data (columns are 'patient', 'tf', 'gene').
+        is_undirected (bool): Whether or not input network is undirected.
 
     Returns:
         tuple: First entry is dict with keys as patient IDs and values are sets of edges tuples
@@ -119,6 +121,8 @@ def networks_to_dict(networks_df : pd.DataFrame) -> tuple:
         networks_dict[patient].add((source, target))
         # Extract TF information.
         tf_dict[patient].add(source)
+        if is_undirected:
+            tf_dict[patient].add(target)
         
     return networks_dict, tf_dict
 
@@ -143,11 +147,12 @@ def compute_mutation_patient_dict(mutations : dict) -> dict:
     
     return mut_patient_dict
 
-def compute_edge_patient_dict(networks : dict) -> dict:
+def compute_edge_patient_dict(networks : dict, is_undirected : bool) -> dict:
     """Computes inverse dictionary of networks dictionary.
 
     Args:
         networks (dict): Keys are patients, values are sets of edges.
+        is_undirected (bool): Whether or not input networks and edges are undirected.
 
     Returns:
         dict: Keys are edges, values are sets of patients.
@@ -156,18 +161,21 @@ def compute_edge_patient_dict(networks : dict) -> dict:
     for pat in networks.keys():
         patient_edges = networks[pat]
         for edge in patient_edges:
+            # In undirected networks edge direction does not matter.
+            if is_undirected:
+                edge = frozenset(edge)
             if not edge in edge_patient_dict.keys():
                 edge_patient_dict[edge] = set()
             edge_patient_dict[edge].add(pat)
     
     return edge_patient_dict
 
-def compute_observation_matrix(edge : tuple, driver : str, mutation_patient_dict : dict,
+def compute_observation_matrix(edge : Union[tuple, frozenset], driver : str, mutation_patient_dict : dict,
                                edge_patient_dict : dict, all_patients : set) -> np.ndarray:
     """Compute frequencies of dysregulation and mutation in whole cohort.
 
     Args:
-        edge (tuple): Dysregulation edge in tuple format (source, target).
+        edge (tuple/frozenset): Directed/undirected dysregulation edge in tuple/frozenset format (source, target).
         driver (str): Name of driver gene.
         mutation_patient_dict (dict): Keys are mutations, values are sets of patients.
         edge_patient_dict (dict): Keys are dysregulation edges, values are sets of patients.
@@ -200,12 +208,12 @@ def compute_observation_matrix(edge : tuple, driver : str, mutation_patient_dict
     return obs_matrix
 
 
-def chi_squared_test(edge : tuple, driver : str, mutation_patient_dict : dict,
+def chi_squared_test(edge : Union[tuple, frozenset], driver : str, mutation_patient_dict : dict,
                      edge_patient_dict : dict, all_patients : set) -> float:
     """Runs chi-squared test on given driver and dysregulation edge.
 
     Args:
-        edge (tuple): Edge in tuple format (source, target).
+        edge (tuple/frozenset): Directed/Undirected edge in tuple/frozenset format (source, target).
         driver (str): Name of driver.
         mutation_patient_dict (dict): Keys are mutations, values are sets of patients.
         edge_patient_dict (dict): Keys are edges, values are sets of patients.
@@ -242,7 +250,8 @@ def chi_squared_test(edge : tuple, driver : str, mutation_patient_dict : dict,
 
 def compute_per_patient_drivers(mutation_patient_dict : dict, edge_patient_dict : dict,
                                 dys_graph : gt.Graph, putative_drivers : dict,
-                                all_patients : set, vertex_to_label : dict) -> dict:
+                                all_patients : set, vertex_to_label : dict,
+                                is_undirected: bool) -> dict:
     """Compute per-patient drivers and dysregulations.
 
     Args:
@@ -252,11 +261,13 @@ def compute_per_patient_drivers(mutation_patient_dict : dict, edge_patient_dict 
         putative_drivers (dict): Keys are mutated TFs, values are genes in kappa neighborhood.
         all_patients (set): Set of all patient IDs in cohort.
         vertex_to_label (dict): Dict with vertex i's label at position i.
+        is_undirected (bool): Whether or not input networks are undirected.
 
     Returns:
         dict: Dict of drivers with keys 'driver', 'dysregulation', 'pvalue'.
     """
     results = {key : [] for key in ['driver', 'dysregulation', 'pvalue']}
+    driver_edge_combis = set()
     
     # Process all putative drivers of given patient.
     for driver, nbors in putative_drivers.items():
@@ -271,11 +282,21 @@ def compute_per_patient_drivers(mutation_patient_dict : dict, edge_patient_dict 
                 source_node = vertex[0]
                 target_node = vertex_to_label[vertex_nbor]
                 edge = (source_node, target_node)
+                # In undirected network edges are stored as sets instead of tuples.
+                if is_undirected:
+                    edge = frozenset(edge)
+                    driver_edge_tuple = (driver[0], edge)
+                    if driver_edge_tuple in driver_edge_combis:
+                        continue
+                    driver_edge_combis.add(driver_edge_tuple)
+                
                 # Test association between driver and dysregulation edge.
                 pval = chi_squared_test(edge, driver[0], mutation_patient_dict, 
                                         edge_patient_dict, all_patients)
                 # Add driver-dysregulation pair to results if significant.
                 if pval < 0.05:
+                    if is_undirected:
+                        edge = set(edge)
                     results['driver'].append(driver[0])
                     results['dysregulation'].append(edge)
                     results['pvalue'].append(pval)
@@ -383,7 +404,7 @@ def process_patients(patients : list, kappa : int, scores : bool,
     
     # Transform mutation and network data into dictionaries for faster lookup.
     mutations = mutations_to_dict(mutations_df)
-    networks, tfs = networks_to_dict(networks_df)
+    networks, tfs = networks_to_dict(networks_df, is_undirected)
     
     del mutations_df
     del networks_df
@@ -399,7 +420,7 @@ def process_patients(patients : list, kappa : int, scores : bool,
     # Precompute sets of patients that contain given mutation or dysregulation edge.
     # Saves computation time in later per-patient chi squared tests.
     mutation_patient_dict = compute_mutation_patient_dict(mutations)
-    edge_patient_dict = compute_edge_patient_dict(networks)
+    edge_patient_dict = compute_edge_patient_dict(networks, is_undirected)
     
     # Analyze each patient individually.
     for pat in patients:
@@ -415,7 +436,7 @@ def process_patients(patients : list, kappa : int, scores : bool,
                                                  dys_graph, vertex_to_label, label_to_vertex)
         # Compute significant driver-dysregulation pairs.
         driver_results = compute_per_patient_drivers(mutation_patient_dict, edge_patient_dict, 
-                                    dys_graph, putative_drivers, all_patients, vertex_to_label)
+                                    dys_graph, putative_drivers, all_patients, vertex_to_label, is_undirected)
         # Append drivers to final output dataframe.
         driver_df = pd.DataFrame(driver_results)
         driver_df.to_csv(output_dir+f'{pat}_drivers.csv', sep='\t', index=False)
