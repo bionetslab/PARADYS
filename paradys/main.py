@@ -5,19 +5,20 @@ from scipy.stats import chisquare, chi2
 import os
 import sys
 
-def build_dysregulation_graph(networks : dict, patient : str) -> tuple:
+def build_dysregulation_graph(networks : dict, patient : str, is_undirected : bool) -> tuple:
     """Build dysregulation network graph object from directed edge list.
 
     Args:
         networks (dict): Keys are patients, values are sets of edges in tuple format, i.e. ('V1', 'V2').
         patient (str): Patient ID to analyze.
+        is_undirected (bool): Whether or not input networks are undirected.
 
     Returns:
         tuple: First entry is graph tools object, second entry is dict containing
         vertex i's label at index i, third entry is dictionary with keys as vertex labels and
         values as corresponding vertex ID.
     """
-    g = gt.Graph(directed=True)
+    g = gt.Graph(directed=(not is_undirected))
     patient_edges = networks[patient]
     vertex_prop = g.add_edge_list(patient_edges, hashed=True)
     # Turn vertex property into dict.
@@ -358,7 +359,7 @@ def compute_driver_scores(driver_results : pd.DataFrame, edge_patient_dict : dic
 
 def process_patients(patients : list, kappa : int, scores : bool, 
                      mutations_path : str, networks_path : str,
-                     output_dir : str, all : bool):
+                     output_dir : str, all : bool, is_undirected : bool):
     """Main function for starting PARADYS analysis.
 
     Args:
@@ -369,6 +370,7 @@ def process_patients(patients : list, kappa : int, scores : bool,
         networks_path (str): Path to input networks file.
         output_dir (str): Path to output directory for storing results.
         all (bool): Whether or not to analyze all patients in the given cohort.
+        is_undirected (bool): Whether or not input networks are undirected.
     """
     
     # Check if output directory exists.
@@ -406,7 +408,7 @@ def process_patients(patients : list, kappa : int, scores : bool,
             sys.exit(f"Patient {pat} is not contained in input cohort. Aborting...")
         
         # Build dysregulation network graph object.
-        dys_graph, vertex_to_label, label_to_vertex = build_dysregulation_graph(networks, pat)
+        dys_graph, vertex_to_label, label_to_vertex = build_dysregulation_graph(networks, pat, is_undirected)
         
         # Compute kappa neighborhood of putative drivers.
         putative_drivers = compute_neighbourhood(kappa, pat, mutations, tfs, 
